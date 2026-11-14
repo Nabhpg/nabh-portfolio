@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  publish = "out"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Models, textures, video and frames never change under the same name; let browsers keep them.
+[[headers]]
+  for = "/film/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+[[headers]]
+  for = "/screening/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

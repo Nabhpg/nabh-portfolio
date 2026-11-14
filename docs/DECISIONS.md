@@ -1,0 +1,39 @@
+# Decisions (append-only; newest last)
+
+- 2026-11-12 — Home = cinematic 3D scroll story; inner pages calm and detailed.
+- 2026-11-12 — Scroll-driven with pinned sections, not hard scroll-hijacking.
+- 2026-11-12 — Identity built on "core self" (Layer 1), not current tech stack, so the site survives interest changes.
+- 2026-11-13 — Home concept: journey through Nabh's mind; moon as recurring thread with phase tied to scroll.
+- 2026-11-13 — First build = foundation + Film & Edit chapter as a vertical slice (placeholder clips OK).
+- 2026-11-13 — Admin panel built after visuals are proven.
+- 2026-11-13 — Lead with creative/business work; no inflated engineering claims.
+- 2026-11-13 — Home opens with the autograph prologue (Nabh's idea): pen unveiled sideways by a streak of light, then signs on scroll. Built before the Film chapter.
+- 2026-11-13 — Dark cinematic look for the home page (cream ink on dark paper, black-and-gold pen).
+- 2026-11-13 — Ink reveal uses the real autograph photo + a baked draw-order map, not a redrawn font/SVG.
+- 2026-11-13 — Pen is procedural geometry (no downloaded 3D model, no logos).
+- 2026-11-13 — Reveal gets a cinema-lens glare layer (blue anamorphic streak, halation, veiling glare, ghosts); paper darkened ~25%.
+- 2026-11-13 — Writing background: mottled paper texture, raking key light through drifting haze, warm/teal split-tone; dust cut to ~40 faint specks visible only near the nib light (bokeh version looked cliché).
+- 2026-11-13 — Skill rack = Nabh's desk seen top-down, real objects around the signed page, doubles as table of contents. Real-world (photographed/scanned) assets preferred over modelled ones.
+- 2026-11-13 — Transition: ink escapes the underline → low chase → climb/roll to top-down → pen drops and becomes the pointer. Built as a prototype; Nabh will keep or scrap after seeing it.
+- 2026-11-13 — Prologue and rack share one canvas and one scroll section (continuous shot); rack-specific code still lives in `src/chapters/rack/`.
+- 2026-11-13 — Skill rack / ink trails SCRAPPED (felt fake). Kept only the camera tilt + travel + half orbit idea.
+- 2026-11-13 — Film & Motion chapter follows the autograph directly, in the same canvas and shot. Motion graphics is part of this chapter, not a separate one.
+- 2026-11-13 — Realism rule: use real scanned assets (Poly Haven CC0) for objects and surfaces; no hand-modelled props. Camera must be a film camera (8mm cine), never digital.
+- 2026-11-13 — Look for everything after the autograph: grungy, hazy, grainy, gloomy, "black-mist filter on a cinema camera"; film strip has a green negative look.
+- 2026-11-13 — Text sections carry editing-software motifs (cursor, bounding box, clips, graph editor, program monitor).
+- 2026-11-13 — Film chapter: no timecode/timeline under the reel; UI accent colours stay in one warm gold family (no purple/green chips).
+- 2026-11-13 — Agency / client section = "The Screening Room": client work is projected (8mm projector, beam, plaster wall), one reel per client, credits roll for Markgenics. Only named, provable clients; "five years" as on the Markgenics site.
+- 2026-11-13 — Prologue, Film & Motion and Screening share one canvas and one sticky scroll section (2500vh).
+- 2026-11-13 — Past clients (Hav Stories, I Want Paris) are shown without links and with minimal claims; only Decor by Tarun (current) links out.
+- 2026-11-13 — No separate interests section (site length); interests go into About as 2–3 lines.
+- 2026-11-13 — "What comes next" = The Denoise: aims shown as an unfinished diffusion run (stops at 34/50). Deliberately away from the camera/film imagery. Aspirations are never presented as skills.
+- 2026-11-13 — Denoise chapter SCRAPPED. "What comes next" is now: film-strip wipe → floating laptop → AI chat that answers a question about Nabh (Nabh's own idea).
+- 2026-11-14 — Contact = last, still section. Public email is nabhpriyagautam@gmail.com. Form sends through FormSubmit (formsubmit.co/ajax/<email>), no server of our own; honeypot field for spam. About-me and interests live here as two lines.
+- 2026-11-14 — Transition reel (laptop chapter) shows only graphic frames, never Nabh's face. AI answer says "student" (no year), "edits videos", and mentions freelancing. Screening opens with "I co-founded a freelancing agency."
+- 2026-11-14 — Contact section carries Nabh's black-and-white portrait (public/contact/nabh.jpg) as a soft-edged print with viewfinder marks, signed with the autograph. FormSubmit activation email was triggered by a test; Nabh still has to click it.
+- 2026-11-14 — Final-fix round: outro reads "A portfolio site / (and the things I build)"; editing copy says "Years of editing"; AI answer says "machine learning and AI"; contact adds Instagram (@nabh.pg) and "philosophy and literature, write poetry and learn languages".
+- 2026-11-14 — Feed film ENDS where it meets the film already wound on the projector's red reel (tangent + short arc); no spiral wrap.
+- 2026-11-14 — "Skip intro" removed. Floating glass nav (`SiteHeader.tsx`, `.nav` CSS): Experience → editing text, Work → projector, About → laptop, Contact. Jumps are instant behind a short black veil (uses `window.__lenis`).
+- 2026-11-14 — Laptop backdrop: drifting haze with warm/cold sides and faint shafts; thin anamorphic glare as the screen comes on.
+- 2026-11-14 — Header is one long glass bar: full name left (shortens to "Nabh" under 720px), section links right. Laptop glare removed (Nabh disliked it). Opening has a scroll prompt: "Scroll to begin" breathing, gold diamond dropping down a thin line (`.cue`).
+- 2026-11-14 — Deployed as a static export (`output: "export"`, `out/`) to Netlify site nabh-portfolio → https://nabh-portfolio.netlify.app. `netlify.toml` holds build + cache headers. Deploys are manual from this Mac (no git connection yet).
