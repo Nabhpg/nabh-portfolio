@@ -19,6 +19,10 @@
 - https://nabh-portfolio.netlify.app (Netlify site `nabh-portfolio`, id ae8b4359-dcd0-4325-8694-fa5d2dba7b27, account Nabh priya Gautam).
 - Redeploy: `PATH="$HOME/.local/node/bin:$PATH" npm run build && npx netlify-cli deploy --dir=out --prod --site=ae8b4359-dcd0-4325-8694-fa5d2dba7b27`
 
+## Code
+- Public repo: https://github.com/Nabhpg/nabh-portfolio (branch main). Kept out via .gitignore: docs/PROFILE.md, assets-src/, .netlify/, .claude/.
+- GitHub CLI lives at ~/.local/gh/bin/gh (logged in as Nabhpg). Commits use the GitHub noreply email.
+
 ## Run
 `PATH="$HOME/.local/node/bin:$PATH" npm run dev` → http://localhost:3000
 

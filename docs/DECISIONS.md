@@ -37,3 +37,4 @@
 - 2026-11-14 — Laptop backdrop: drifting haze with warm/cold sides and faint shafts; thin anamorphic glare as the screen comes on.
 - 2026-11-14 — Header is one long glass bar: full name left (shortens to "Nabh" under 720px), section links right. Laptop glare removed (Nabh disliked it). Opening has a scroll prompt: "Scroll to begin" breathing, gold diamond dropping down a thin line (`.cue`).
 - 2026-11-14 — Deployed as a static export (`output: "export"`, `out/`) to Netlify site nabh-portfolio → https://nabh-portfolio.netlify.app. `netlify.toml` holds build + cache headers. Deploys are manual from this Mac (no git connection yet).
+- 2026-11-14 — Code published to public repo Nabhpg/nabh-portfolio. Private profile notes and raw signature/source photos stay local only. Netlify deploys remain manual (repo not linked to Netlify yet).
