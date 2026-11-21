@@ -23,6 +23,8 @@
 - Public repo: https://github.com/Nabhpg/nabh-portfolio (branch main). Kept out via .gitignore: docs/PROFILE.md, assets-src/, .netlify/, .claude/.
 - GitHub CLI lives at ~/.local/gh/bin/gh (logged in as Nabhpg). Commits use the GitHub noreply email.
 
+- **Phone performance pass** (docs/PERFORMANCE.md): stutter at section changes removed, phone quality tier, readable phone chat, fixed phone logos, loader.
+
 ## Run
 `PATH="$HOME/.local/node/bin:$PATH" npm run dev` → http://localhost:3000
 

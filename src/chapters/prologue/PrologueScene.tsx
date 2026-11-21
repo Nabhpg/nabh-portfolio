@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useMemo, useRef, type RefObject } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Environment, Lightformer } from "@react-three/drei";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { Environment, Lightformer, PerformanceMonitor, useProgress } from "@react-three/drei";
+import { LITE, LITE_DEF } from "@/lib/quality";
+import { loading } from "@/lib/loading";
 import { Bloom, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 import Pen, { PEN_LENGTH } from "./Pen";
@@ -40,7 +42,12 @@ const paperVert = /* glsl */ `
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }`;
 
-const paperFrag = /* glsl */ `
+const paperFrag = LITE_DEF + /* glsl */ `
+  #ifdef LITE
+  #define OCT 2
+  #else
+  #define OCT 4
+  #endif
   varying vec2 vSig; varying vec2 vW;
   uniform sampler2D uInk, uOrder;
   uniform vec2 uSheetC, uSheetH;
@@ -53,7 +60,7 @@ const paperFrag = /* glsl */ `
     vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
   }
-  float fbm(vec2 p) { float a = 0.5, v = 0.0; for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + 17.0; a *= 0.5; } return v; }
+  float fbm(vec2 p) { float a = 0.5, v = 0.0; for (int i = 0; i < OCT; i++) { v += a * vnoise(p); p = p * 2.03 + 17.0; a *= 0.5; } return v; }
   void main() {
     vec2 uv = vSig;
     // dark paper, lit by a warm pool of light that follows the nib
@@ -259,6 +266,8 @@ function Stage({ progress, film, screen, laptop, reduced }: SceneProps) {
   const flareInit = useMemo(() => ({ uI: { value: 0 } }), []);
 
   const scratch = useRef<Scratch | null>(null);
+  // the opening's own textures are in (this component suspends until they are): the page can let people scroll
+  useEffect(() => { loading.intro(); }, []);
 
   useFrame(({ camera, scene, size, viewport }, dtRaw) => {
     const s = (scratch.current ??= makeScratch(reduced));
@@ -422,17 +431,15 @@ function Stage({ progress, film, screen, laptop, reduced }: SceneProps) {
         <shaderMaterial ref={dustMat} vertexShader={dustVert} fragmentShader={dustFrag} uniforms={dustInit} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
 
-      {/* its own Suspense: the autograph must never wait for the film chapter's assets */}
+      {/* the chapters load together behind the autograph (which never waits for them), then get warmed up */}
       <Suspense fallback={null}>
         <FilmScene f={filmF} s={screenS} />
-      </Suspense>
-      <Suspense fallback={null}>
         <ScreeningScene s={screenS} />
-      </Suspense>
-      <Suspense fallback={null}>
         <LaptopScene x={laptopX} />
         <ReelWipe x={laptopX} />
+        <Warmup />
       </Suspense>
+      <LoadProgress />
 
       <Pen ref={pen} />
       <pointLight ref={nibLight} color="#ffd9a8" distance={7} decay={2} intensity={0} />
@@ -456,7 +463,7 @@ function Stage({ progress, film, screen, laptop, reduced }: SceneProps) {
         <shaderMaterial ref={lensMat} vertexShader={lensVert} fragmentShader={lensFrag} uniforms={lensInit} transparent depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending} />
       </mesh>
 
-      <Environment resolution={256} frames={1}>
+      <Environment resolution={LITE ? 128 : 256} frames={1}>
         <color attach="background" args={["#000"]} />
         <Lightformer form="rect" intensity={7} color="#fff4e2" position={[0, 6, 3]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 1.2, 1]} />
         <Lightformer form="rect" intensity={3.5} color="#ffcf9a" position={[-7, 1, 4]} rotation={[0, Math.PI / 2, 0]} scale={[6, 0.7, 1]} />
@@ -468,20 +475,70 @@ function Stage({ progress, film, screen, laptop, reduced }: SceneProps) {
   );
 }
 
-export default function PrologueScene(props: SceneProps) {
+/** Reports asset loading to the page's loader. */
+function LoadProgress() {
+  const { progress } = useProgress();
+  useEffect(() => { loading.set(progress / 100); }, [progress]);
+  return null;
+}
+
+/**
+ * Once everything has loaded, draw the whole scene once, off screen, with every object shown and nothing culled.
+ * That compiles every shader (shadow ones included) and uploads every texture and mesh to the GPU now, behind
+ * the opening, instead of the first time each chapter scrolls into view, which is what made the cuts stutter.
+ */
+function Warmup() {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    let cancelled = false;
+    const hidden: THREE.Object3D[] = [], culled: THREE.Object3D[] = [];
+    scene.traverse((o) => {
+      if (!o.visible) { hidden.push(o); o.visible = true; }
+      if (o.frustumCulled) { culled.push(o); o.frustumCulled = false; }
+    });
+    const rt = new THREE.WebGLRenderTarget(16, 16);
+    const auto = gl.shadowMap.autoUpdate;
+    try {
+      gl.compile(scene, camera);
+      gl.shadowMap.autoUpdate = true; gl.shadowMap.needsUpdate = true;
+      gl.setRenderTarget(rt); gl.render(scene, camera);
+    } catch { /* a failed warm-up only costs a later hitch */ }
+    gl.setRenderTarget(null);
+    gl.shadowMap.autoUpdate = auto;
+    hidden.forEach((o) => { o.visible = false; });
+    culled.forEach((o) => { o.frustumCulled = true; });
+    rt.dispose();
+    const id = requestAnimationFrame(() => { if (!cancelled) loading.done(); });
+    return () => { cancelled = true; cancelAnimationFrame(id); };
+  }, [gl, scene, camera]);
+  return null;
+}
+
+export default function PrologueScene({ running, ...props }: SceneProps & { running: boolean }) {
+  // resolution adapts to the device: start modest on phones, step down if frames drop, back up if there is room
+  const maxDpr = useMemo(() => Math.min(typeof window === "undefined" ? 1 : window.devicePixelRatio || 1, LITE ? 1.5 : 1.75), []);
+  const [dpr, setDpr] = useState(() => Math.min(maxDpr, LITE ? 1.25 : 1.5));
   return (
     <Canvas
-      shadows="soft"
-      dpr={[1, 1.75]}
+      shadows={LITE ? false : "soft"}
+      dpr={dpr}
+      frameloop={running ? "always" : "never"}
+      resize={{ scroll: false, debounce: { scroll: 0, resize: 120 } }}
       camera={{ fov: FOV, near: 0.1, far: 120, position: [0, 0, 9] }}
-      gl={{ antialias: true, powerPreference: "high-performance" }}
+      gl={{ antialias: !LITE, stencil: false, powerPreference: "high-performance" }}
       style={{ position: "absolute", inset: 0 }}
     >
+      <PerformanceMonitor
+        flipflops={4}
+        onDecline={() => setDpr((d) => Math.max(1, +(d - 0.25).toFixed(2)))}
+        onIncline={() => setDpr((d) => Math.min(maxDpr, +(d + 0.25).toFixed(2)))}
+        onFallback={() => setDpr(1)}
+      />
       <color attach="background" args={["#000"]} />
       <fogExp2 attach="fog" args={["#070a09", 0]} />
       <Stage {...props} />
       <EffectComposer multisampling={0}>
-        <Bloom ref={(e) => { fx.bloom = e; }} mipmapBlur intensity={0.75} luminanceThreshold={0.8} luminanceSmoothing={0.2} radius={0.7} />
+        <Bloom ref={(e) => { fx.bloom = e; }} mipmapBlur intensity={0.75} luminanceThreshold={0.8} luminanceSmoothing={0.2} radius={0.7} levels={LITE ? 5 : 8} resolutionScale={LITE ? 0.5 : 1} />
         <Noise ref={(e) => { fx.noise = e; }} premultiply blendFunction={BlendFunction.SCREEN} opacity={0.5} />
         <primitive object={fx.grade} dispose={null} />
         <Vignette offset={0.22} darkness={0.78} />

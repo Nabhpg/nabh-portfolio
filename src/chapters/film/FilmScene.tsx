@@ -6,6 +6,7 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { CINE, CINE_YAW, FILM, SHEET_C, SHEET_H, SUN, ease, seg, stripPath } from "./timeline";
 import { feedPath } from "../screening/timeline";
+import { LITE, pick } from "@/lib/quality";
 
 const CINE_SCALE = 27; // scanned model is in metres; the desk is ~3 cm per unit
 const STRIP_W = 1.15;
@@ -134,12 +135,16 @@ function appTile(text: string) {
   return t;
 }
 
-useGLTF.preload("/film/camera/camera.gltf", false);
+const CAMERA_GLTF = pick("/film/camera/camera.gltf", "/film/camera/camera_lite.gltf");
+const WOOD = pick(["/film/desk/wood_diff.jpg", "/film/desk/wood_nor.jpg", "/film/desk/wood_rough.jpg"], ["/film/desk/wood_diff_1k.jpg", "/film/desk/wood_nor_1k.jpg", "/film/desk/wood_rough_1k.jpg"]);
+// start every download at once (otherwise the textures wait for the model to finish: a waterfall)
+useGLTF.preload(CAMERA_GLTF, false);
+useLoader.preload(THREE.TextureLoader, [...WOOD, "/film/frames.jpg"]);
 
 /** Everything the film chapter adds to the shot: real desk, scanned 8mm camera, backlight, film strip, app tiles. */
 export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject<number> }) {
-  const cine = useGLTF("/film/camera/camera.gltf", false);
-  const [diff, nor, rough, atlas] = useLoader(THREE.TextureLoader, ["/film/desk/wood_diff.jpg", "/film/desk/wood_nor.jpg", "/film/desk/wood_rough.jpg", "/film/frames.jpg"]);
+  const cine = useGLTF(CAMERA_GLTF, false);
+  const [diff, nor, rough, atlas] = useLoader(THREE.TextureLoader, [...WOOD, "/film/frames.jpg"]);
   const ready = useRef(false);
   const desk = useRef<THREE.Mesh>(null), deskMat = useRef<THREE.MeshStandardMaterial>(null);
   const cineGroup = useRef<THREE.Group>(null);
@@ -151,16 +156,20 @@ export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject
   const contactMat = useRef<THREE.ShaderMaterial>(null);
   const time = useRef(0);
 
-  const geo = useMemo(() => [stripGeometry(stripPath(false)), stripGeometry(stripPath(true)), stripGeometry(feedPath(), false)], []);
+  // set before the warm-up draw, so the shadow shaders for the camera get compiled with everything else
+  useMemo(() => cine.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = !LITE; }), [cine]);
+  const curves = useMemo(() => [stripPath(false), stripPath(true)], []);
+  const geo = useMemo(() => [stripGeometry(curves[0]), stripGeometry(curves[1]), stripGeometry(feedPath(), false)], [curves]);
+  const tmp = useMemo(() => ({ p: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3() }), []);
   const stripU = useMemo(() => geo.map(() => ({ uAtlas: { value: atlas }, uReveal: { value: 0 }, uSlide: { value: 0 }, uTime: { value: 0 }, uI: { value: 1 }, uSun: { value: SUN } })), [geo, atlas]);
   const glowU = useMemo(() => ({ uI: { value: 0 } }), []);
   const shadowU = useMemo(() => ({ uI: { value: 0 }, uHalf: { value: new THREE.Vector2(...SHEET_H) } }), []);
   const contactU = useMemo(() => ({ uI: { value: 0 } }), []);
   const tileTex = useMemo(() => [appTile("Pr"), appTile("Ae")], []);
 
-  useFrame(({ camera, size, scene }, dt) => {
+  useFrame(({ camera, size, scene, gl }, dt) => {
     if (!ready.current) {
-      for (const t of [diff, nor, rough]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.anisotropy = 8; t.needsUpdate = true; }
+      for (const t of [diff, nor, rough]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.anisotropy = LITE ? 4 : 8; t.needsUpdate = true; }
       diff.colorSpace = THREE.SRGBColorSpace;
       atlas.colorSpace = THREE.SRGBColorSpace; atlas.needsUpdate = true;
       ready.current = true;
@@ -176,7 +185,9 @@ export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject
     if (deskMat.current) deskMat.current.envMapIntensity = 0.1 * on; // more than this and grey reflections wash the wood out
     if (shadow.current) shadow.current.visible = on > 0;
     if (shadowMat.current) shadowMat.current.uniforms.uI.value = on;
-    if (sun.current) { sun.current.visible = on > 0; sun.current.intensity = 2.4 * on * back; }
+    if (sun.current) sun.current.intensity = 2.4 * on * back;
+    // the shadow map only needs redrawing while the desk is in view (it is off entirely on phones)
+    gl.shadowMap.autoUpdate = !LITE && on > 0 && day > 0;
     if (key.current) key.current.intensity = 130 * on * back;
     if (scene.fog) (scene.fog as THREE.FogExp2).density = 0.022 * on; // the far desk dissolves into haze
     if (fill.current) fill.current.intensity = 0.05 * on;
@@ -189,7 +200,6 @@ export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject
     if (cineGroup.current) {
       cineGroup.current.visible = on > 0;
       cineGroup.current.traverse((o) => {
-        if ((o as THREE.Mesh).isMesh) o.castShadow = true;
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
         if (m && "envMapIntensity" in m) m.envMapIntensity = 0.55 * on;
       });
@@ -210,14 +220,23 @@ export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject
     const lg = seg(ff, FILM.logos);
     tiles.current.forEach((m, i) => {
       if (!m) return;
-      const a = ease(clamp01(lg * 1.6 - i * 0.5)) * day;
+      const a = ease(clamp01(lg * 1.6 - i * 0.5)) * (1 - ease(seg(ss, [0, 0.035]))); // gone before the camera leaves for the projector
       m.visible = a > 0.001;
-      const far = portrait ? 1.85 : 1, ys = portrait ? 0.42 : 1;
-      const base = i === 0 ? [-2.6, -3.7, 2.75] : [-3.4, -6.9, 3.05]; // behind the plane the film travels in, tucked under its arc
-      m.position.set(CINE[0] + base[0] * far, CINE[1] + base[1] * ys, base[2] * (portrait ? 1.25 : 1) + Math.sin(time.current * 0.6 + i * 2) * 0.07 - (1 - a) * 0.7);
+      if (portrait) {
+        // on a tall screen: anchored to the frame (top left, above the camera), set just behind the film so its arc crosses them
+        tmp.p.set(i ? -0.04 : -0.5, (i ? 0.64 : 0.5) + Math.sin(time.current * 0.6 + i * 2) * 0.008 - (1 - a) * 0.04, 0.5).unproject(camera);
+        tmp.d.subVectors(tmp.p, camera.position).normalize();
+        tmp.up.set(CINE[0], CINE[1], 2);
+        const depth = camera.position.distanceTo(tmp.up) * 1.06;
+        m.position.copy(camera.position).addScaledVector(tmp.d, depth);
+        m.userData.fit = (0.23 * 2 * Math.tan(THREE.MathUtils.degToRad(17.5)) * (size.width / size.height) * depth) / 2.3;
+      } else {
+        const base = i === 0 ? [-2.6, -3.7, 2.75] : [-3.4, -6.9, 3.05]; // behind the plane the film travels in, tucked under its arc
+        m.position.set(CINE[0] + base[0], CINE[1] + base[1], base[2] + Math.sin(time.current * 0.6 + i * 2) * 0.07 - (1 - a) * 0.7);
+      }
       m.quaternion.copy(camera.quaternion);
       m.rotateZ((i ? 1 : -1) * 0.07);
-      m.scale.setScalar((0.85 + 0.15 * a) * (portrait ? 1.3 : 1));
+      m.scale.setScalar((0.85 + 0.15 * a) * (portrait ? (m.userData.fit as number) : 1));
       const mat = m.material as THREE.MeshBasicMaterial;
       mat.opacity = a; mat.color.setScalar(0.34 * back);
     });
@@ -246,7 +265,7 @@ export default function FilmScene({ f, s }: { f: RefObject<number>; s: RefObject
       </mesh>
 
       {/* low sun behind the page: backlight, rim and the long sheen on the wood */}
-      <directionalLight ref={sun} position={SUN} color="#ffbf7a" intensity={0} visible={false} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.04} shadow-radius={7}>
+      <directionalLight ref={sun} position={SUN} color="#ffbf7a" intensity={0} castShadow={!LITE} shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.04} shadow-radius={7}>
         <orthographicCamera attach="shadow-camera" args={[-9, 9, 9, -9, 1, 90]} />
       </directionalLight>
       <pointLight ref={key} position={[CINE[0] + 6, CINE[1] + 3, 6]} color="#ffcc94" distance={30} decay={2} intensity={0} />

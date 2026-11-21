@@ -1,6 +1,8 @@
 import { CLIENTS, SHOW, ease, reelAt, seg } from "./timeline";
+import { LITE } from "@/lib/quality";
 
 const W = 1024, H = 576;
+const SCALE = LITE ? 0.625 : 1;
 
 /**
  * What the projector shows: title slates, client footage and the closing credits, painted to a canvas
@@ -18,17 +20,20 @@ export class Programme {
   private serif = "Georgia, serif";
   private sans = "Helvetica, Arial, sans-serif";
   private tick = 0;
-  private warmed = false;
 
   constructor() {
-    this.canvas.width = W; this.canvas.height = H;
+    // phones paint the picture at a lower resolution; layout below stays in 1024 × 576 units
+    this.canvas.width = Math.round(W * SCALE); this.canvas.height = Math.round(H * SCALE);
     this.x = this.canvas.getContext("2d")!;
     this.probe.width = this.probe.height = 4;
     this.px = this.probe.getContext("2d", { willReadFrequently: true })!;
     this.decor.src = "/screening/decor.jpg";
+    this.decor.decode?.().catch(() => {}); // decode now, not on the first frame it is drawn
     for (const src of ["/screening/hav1.mp4", "/screening/hav2.mp4"]) {
       const v = document.createElement("video");
-      v.src = src; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "none";
+      v.src = src; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto";
+      // start the decoder once, early, so the reel does not hitch when its footage comes up
+      v.addEventListener("loadeddata", () => { v.play().then(() => v.pause()).catch(() => {}); }, { once: true });
       this.vids.push(v);
     }
     const css = getComputedStyle(document.documentElement);
@@ -68,9 +73,12 @@ export class Programme {
     }
     if (i === 1 && this.vids[0].readyState >= 2) {
       // two vertical ad films side by side, over a soft copy of the first
-      c.filter = "blur(26px) brightness(0.45) saturate(1.2)";
-      c.drawImage(this.vids[0], -40, -200, W + 80, ((W + 80) * 16) / 9);
-      c.filter = "none";
+      if (LITE) { c.fillStyle = "#0d0b09"; c.fillRect(0, 0, W, H); } // a canvas blur every frame is too slow on phones
+      else {
+        c.filter = "blur(26px) brightness(0.45) saturate(1.2)";
+        c.drawImage(this.vids[0], -40, -200, W + 80, ((W + 80) * 16) / 9);
+        c.filter = "none";
+      }
       const ph = H - 44, pw = (ph * 9) / 16, gap = 46, x0 = W / 2 - pw - gap / 2;
       this.vids.forEach((v, k) => { if (v.readyState >= 2) c.drawImage(v, x0 + k * (pw + gap), 22, pw, ph); });
       return;
@@ -102,9 +110,9 @@ export class Programme {
   /** Paint the frame for screening progress s. Returns true when the picture changed. */
   draw(s: number) {
     const c = this.x, { i, p } = reelAt(s);
+    c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     const lamp = ease(seg(s, SHOW.lamp));
     const wantVideo = i === 1;
-    if (!this.warmed && s > 0.02) { this.warmed = true; for (const v of this.vids) { v.preload = "auto"; v.load(); } } // fetch the ad films before their reel comes up
     for (const v of this.vids) {
       if (wantVideo && v.paused) v.play().catch(() => {});
       if (!wantVideo && !v.paused) v.pause();
@@ -114,7 +122,7 @@ export class Programme {
     else if (s >= SHOW.credits[0]) this.credits(seg(s, SHOW.credits));
     else if (s < SHOW.reels[0][0]) { c.fillStyle = "#e9dfca"; c.fillRect(0, 0, W, H); }  // bare lamp through an empty gate
     else { c.fillStyle = "#050505"; c.fillRect(0, 0, W, H); }                              // between reels
-    if (this.tick++ % 6 === 0) {
+    if (this.tick++ % 8 === 0) {
       this.px.drawImage(this.canvas, 0, 0, 4, 4);
       const d = this.px.getImageData(0, 0, 4, 4).data;
       let r = 0, g = 0, b = 0;

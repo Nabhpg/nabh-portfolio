@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { FILM, ease, seg } from "./timeline";
+import { styleWriter } from "@/lib/styleWriter";
+import { loading } from "@/lib/loading";
 
 /** The editing-software cursor that drags words into place. */
 const Cursor = () => (
@@ -23,14 +25,23 @@ const Bounds = () => (
 export default function FilmOverlay({ film, out }: { film: RefObject<number>; out: RefObject<number> }) {
   const root = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
-  const glow = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     let raf = 0;
+    const w = root.current ? styleWriter(root.current) : null;
+    // once the film has loaded, start and stop the reel's decoder, so pressing play later costs nothing
+    const offReady = loading.on((_, __, ready) => {
+      if (!ready) return;
+      for (const v of [video.current]) {
+        if (!v || v.dataset.warm) continue;
+        v.dataset.warm = "1"; v.preload = "auto";
+        v.play().then(() => { if (!(film.current > 0.61)) v.pause(); }).catch(() => {});
+      }
+    });
     const tick = () => {
       const el = root.current, f = film.current ?? 0, gone = ease(seg(out.current ?? 0, [0, 0.045]));
-      if (el) {
-        const set = (k: string, v: number) => el.style.setProperty(k, v.toFixed(4));
+      if (el && w) {
+        const set = (k: string, v: number) => w(k, v);
         const a = seg(f, FILM.beatA), b = seg(f, FILM.beatB);
         set("--cap", ease(seg(f, [0.44, 0.5])) * (1 - ease(seg(f, [0.58, 0.63]))));
         set("--dim", ease(seg(f, FILM.dim)));
@@ -47,22 +58,19 @@ export default function FilmOverlay({ film, out }: { film: RefObject<number>; ou
         set("--b-box", ease(seg(b, [0.1, 0.2])));
         set("--b-away", ease(seg(b, [0.44, 0.58])));
         set("--b-curve", ease(seg(b, [0.4, 0.85])));
-        el.style.visibility = f > 0.4 && gone < 1 ? "visible" : "hidden";
-        el.style.opacity = (1 - gone).toFixed(3);
+        w("visibility", f > 0.4 && gone < 1 ? "visible" : "hidden");
+        w("opacity", 1 - gone);
         const want = f > 0.61 && gone < 1;
-        for (const v of [video.current, glow.current]) {
+        for (const v of [video.current]) {
           if (!v) continue;
           if (want && v.paused) v.play().catch(() => {});
           if (!want && !v.paused) v.pause();
         }
-        // the halo is the same picture, blurred; keep it in step with the main one
-        const v = video.current, g = glow.current;
-        if (v && g && Math.abs(g.currentTime - v.currentTime) > 0.3) g.currentTime = v.currentTime;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); offReady(); };
   }, [film, out]);
 
   return (
@@ -120,9 +128,10 @@ export default function FilmOverlay({ film, out }: { film: RefObject<number>; ou
         </div>
 
         <figure className="fo-monitor">
-          <video ref={glow} className="fo-halo" src="/film/reel.mp4" muted loop playsInline preload="none" aria-hidden />
+          {/* the light behind the monitor: a blurred still, not a second playing video (a second decoder plus a live blur cost frames) */}
+          <img className="fo-halo" src="/film/poster.jpg" alt="" aria-hidden />
           <div className="fo-screen">
-            <video ref={video} src="/film/reel.mp4" poster="/film/poster.jpg" muted loop playsInline preload="none" />
+            <video ref={video} src="/film/reel.mp4" poster="/film/poster.jpg" muted loop playsInline preload="metadata" />
             <span className="fo-leak" aria-hidden />
             <span className="fo-grain" aria-hidden />
           </div>

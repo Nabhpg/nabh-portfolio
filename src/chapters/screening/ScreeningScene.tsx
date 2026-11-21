@@ -6,6 +6,10 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { Programme } from "./programme";
 import { LENS, PIC, PJ, PJ_SCALE, SHOW, WALL_Y, ease, flashAt, seg } from "./timeline";
+import { LITE, pick } from "@/lib/quality";
+
+const PROJECTOR_GLTF = pick("/screening/projector/projector.gltf", "/screening/projector/projector_lite.gltf");
+const WALL = pick(["/screening/wall_diff.jpg", "/screening/wall_nor.jpg"], ["/screening/wall_diff_1k.jpg", "/screening/wall_nor_1k.jpg"]);
 
 const wallVert = /* glsl */ `
   varying vec3 vW;
@@ -37,12 +41,16 @@ const wallFrag = /* glsl */ `
     // the frame itself, with the lens racking into focus
     vec3 img = vec3(0.0);
     float r = uBlur * 0.016 + 0.0009;
+    if (uBlur < 0.004) {
+      img = vec3(texture2D(uProg, uv + vec2(0.0009, 0.0)).r, texture2D(uProg, uv).g, texture2D(uProg, uv - vec2(0.0009, 0.0)).b);
+    } else {
     for (int k = 0; k < 8; k++) {
       float a = float(k) * 0.7854;
       vec2 o = vec2(cos(a), sin(a)) * r * vec2(1.0, 1.78);
       img += vec3(texture2D(uProg, uv + o * 1.08).r, texture2D(uProg, uv + o).g, texture2D(uProg, uv + o * 0.92).b);
     }
     img /= 8.0;
+    }
     float flick = 0.9 + 0.1 * hash(vec2(t24, 7.0));
     float hot = 1.0 - 0.42 * dot(uv - 0.5, uv - 0.5) * 2.4;                         // lamp hotspot
     img = img * flick * hot;
@@ -85,12 +93,13 @@ const lensFrag = /* glsl */ `
   void main() { float r = length(vUv - 0.5) * 2.0; gl_FragColor = vec4(vec3(1.0, 0.9, 0.74) * (exp(-r * r * 30.0) * 1.6 + exp(-r * 3.0) * 0.16) * uOn, 1.0); }`;
 const uvVert = /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 
-useGLTF.preload("/screening/projector/projector.gltf", false);
+useGLTF.preload(PROJECTOR_GLTF, false);
+useLoader.preload(THREE.TextureLoader, WALL);
 
 /** The screening room: a scanned 8mm projector, its beam through the haze, and client work as light on a plaster wall. */
 export default function ScreeningScene({ s }: { s: RefObject<number> }) {
-  const proj = useGLTF("/screening/projector/projector.gltf", false);
-  const [wallTex, wallNor] = useLoader(THREE.TextureLoader, ["/screening/wall_diff.jpg", "/screening/wall_nor.jpg"]);
+  const proj = useGLTF(PROJECTOR_GLTF, false);
+  const [wallTex, wallNor] = useLoader(THREE.TextureLoader, WALL);
   const programme = useMemo(() => new Programme(), []);
   const progTex = useMemo(() => {
     const t = new THREE.CanvasTexture(programme.canvas);
@@ -103,7 +112,7 @@ export default function ScreeningScene({ s }: { s: RefObject<number> }) {
   const wallMat = useRef<THREE.ShaderMaterial>(null), beamMat = useRef<THREE.ShaderMaterial>(null), lensMat = useRef<THREE.ShaderMaterial>(null);
   const lensGlow = useRef<THREE.Mesh>(null);
   const bounce = useRef<THREE.PointLight>(null), leak = useRef<THREE.PointLight>(null);
-  const st = useRef({ time: 0, ready: false, spools: [] as THREE.Object3D[] });
+  const st = useRef({ time: 0, ready: false, paint: 1, spools: [] as THREE.Object3D[] });
 
   const wallGeo = useMemo(() => {
     const g = new THREE.BufferGeometry(), x0 = PIC.x - 60, x1 = PIC.x + 60, z0 = -0.5, z1 = 34;
@@ -134,19 +143,26 @@ export default function ScreeningScene({ s }: { s: RefObject<number> }) {
   useFrame(({ camera }, dt) => {
     const S = st.current, ss = s.current ?? 0;
     if (!S.ready) {
-      for (const t of [wallTex, wallNor]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.needsUpdate = true; }
+      for (const t of [wallTex, wallNor]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = LITE ? 4 : 8; t.needsUpdate = true; }
       wallTex.colorSpace = THREE.SRGBColorSpace;
       for (const n of ["filmstrip_projector_8mm_spool_feed", "filmstrip_projector_8mm_spool_takeup"]) { const o = proj.scene.getObjectByName(n); if (o) S.spools.push(o); }
       S.ready = true;
     }
     if (group.current) group.current.visible = ss > 0;
-    if (ss <= 0) return;
+    if (ss <= 0) {
+      if (bounce.current) bounce.current.intensity = 0;
+      if (leak.current) leak.current.intensity = 0;
+      return;
+    }
     S.time += Math.min(dt, 0.05);
 
     const room = ease(seg(ss, [0.0, 0.1]));
     const lamp = ease(seg(ss, SHOW.lamp));
-    try { programme.draw(ss); } catch { /* a frame that fails to paint must never stop the scene from rendering */ }
-    progTex.needsUpdate = true;
+    S.paint += dt;
+    if (S.paint >= 1 / 30) {
+      S.paint = 0;
+      try { programme.draw(ss); progTex.needsUpdate = true; } catch { /* a frame that fails to paint must never stop the scene from rendering */ }
+    }
     const [ar, ag, ab] = programme.avg.map((v) => (Number.isFinite(v) ? v : 0));
 
     // reels turn while the lamp is on
@@ -176,6 +192,7 @@ export default function ScreeningScene({ s }: { s: RefObject<number> }) {
   });
 
   return (
+    <>
     <group ref={group} visible={false}>
       <mesh geometry={wallGeo}>
         <shaderMaterial ref={wallMat} vertexShader={wallVert} fragmentShader={wallFrag} uniforms={wallU} side={THREE.DoubleSide} />
@@ -194,9 +211,11 @@ export default function ScreeningScene({ s }: { s: RefObject<number> }) {
         <shaderMaterial ref={lensMat} vertexShader={uvVert} fragmentShader={lensFrag} uniforms={lensU} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
 
-      {/* the picture lights the room: bounce off the wall, and a warm leak from the lamp house */}
-      <pointLight ref={bounce} position={[PIC.x, WALL_Y + 4, PIC.z]} distance={70} decay={2} intensity={0} />
-      <pointLight ref={leak} position={[PJ.x + 1.4, PJ.y + 1.5, 4.2]} color="#ffb070" distance={11} decay={2} intensity={0} />
     </group>
+    {/* the picture lights the room: bounce off the wall, and a warm leak from the lamp house.
+        Outside the hidden group on purpose: a light that appears or disappears forces every material to recompile. */}
+    <pointLight ref={bounce} position={[PIC.x, WALL_Y + 4, PIC.z]} distance={70} decay={2} intensity={0} />
+    <pointLight ref={leak} position={[PJ.x + 1.4, PJ.y + 1.5, 4.2]} color="#ffb070" distance={11} decay={2} intensity={0} />
+    </>
   );
 }

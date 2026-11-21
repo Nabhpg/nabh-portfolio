@@ -209,3 +209,57 @@ html.lenis, html.lenis body { height: auto; }
 @keyframes cue-drop { 0% { transform: translateY(-4px) rotate(45deg); opacity: 0; } 18% { opacity: 1; } 70% { opacity: 1; } 100% { transform: translateY(4.4rem) rotate(45deg); opacity: 0; } }
 @keyframes cue-breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .cue-dot, .cue-label { animation: none; } .cue-dot { top: 50%; } }
+
+/* the conversation, drawn by the page on tall screens (on wide screens it lives on the laptop's 3D screen) */
+.lp-chat { position: absolute; left: 4vw; right: 4vw; top: calc(4.4rem + 3svh); bottom: calc(5.5rem + 3svh); display: flex; flex-direction: column;
+  border-radius: 18px; overflow: hidden; color: #ebe7df; background: linear-gradient(180deg, #111215, #0a0b0d);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 120px rgba(170, 190, 220, 0.08); }
+.lp-bar { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.1rem; font-size: 0.78rem; color: #b9b5ae; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.lp-online { display: flex; align-items: center; gap: 0.45rem; font-size: 0.7rem; color: #77746f; }
+.lp-online i { width: 6px; height: 6px; border-radius: 50%; background: #f1d6a4; }
+.lp-thread { flex: 1; display: flex; flex-direction: column; gap: 1.2rem; padding: 1.2rem 1.1rem; overflow: hidden; }
+.lp-q { align-self: flex-end; max-width: 85%; padding: 0.7rem 0.95rem; border-radius: 18px; background: rgba(255, 255, 255, 0.08); font-size: 0.95rem; line-height: 1.45; color: #f2efe9;
+  opacity: 0; transform: translateY(8px); transition: opacity 0.3s, transform 0.3s; }
+.lp-q.on { opacity: 1; transform: none; }
+.lp-a { display: flex; flex-direction: column; gap: 0.75rem; opacity: 0; transition: opacity 0.3s; }
+.lp-a.on { opacity: 1; }
+.lp-who { display: flex; align-items: center; gap: 0.55rem; font-size: 0.72rem; color: #a8a39b; }
+.lp-who i { width: 9px; height: 9px; background: #f1d6a4; transform: rotate(45deg); }
+.lp-a p:not(.lp-who) { font-size: 1.02rem; line-height: 1.6; color: #ebe7df; }
+.lp-a p:empty { display: none; }
+.lp-a p.caret::after { content: ""; display: inline-block; width: 0.5em; height: 1em; margin-left: 0.2em; vertical-align: -0.12em; background: #f1d6a4; animation: dz-caret 1s steps(1) infinite; }
+.lp-dots { display: none; gap: 6px; }
+.lp-dots.on { display: flex; }
+.lp-dots i { width: 7px; height: 7px; border-radius: 50%; background: #cfc9c0; animation: lp-dot 1.2s ease-in-out infinite; }
+.lp-dots i:nth-child(2) { animation-delay: 0.15s; } .lp-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes lp-dot { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+@keyframes dz-caret { 50% { opacity: 0; } }
+.lp-input { display: flex; align-items: center; gap: 0.5rem; margin: 0 0.9rem 0.9rem; padding: 0.75rem 0.6rem 0.75rem 1rem; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055); border: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.92rem; color: #f2efe9; min-height: 3rem; }
+.lp-input > span:first-child:empty { display: none; }
+.lp-input.typing > span:first-child::after { content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -0.15em; background: #f1d6a4; animation: dz-caret 1s steps(1) infinite; }
+.lp-ph { color: #6f6c67; }
+.lp-input.typing .lp-ph { display: none; }
+.lp-input b { margin-left: auto; width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-size: 0.95rem; color: #8d8a85; background: rgba(255, 255, 255, 0.12); }
+.lp-input.typing b { color: #141210; background: #f1d6a4; }
+@media (min-aspect-ratio: 1/1) { .lp-chat { display: none; } }
+
+/* while the film loads, the scroll cue's line fills instead of the diamond dropping */
+.cue-fill { position: absolute; inset: 0; background: #f1d6a4; transform-origin: top; transform: scaleY(0); opacity: 0; transition: transform 0.4s ease, opacity 0.5s ease; }
+.cue-loading .cue-fill { opacity: 0.7; }
+.cue-loading .cue-dot { opacity: 0; animation: none; }
+.cue-loading .cue-label { animation: none; opacity: 0.75; }
+
+/* ───────── Phones and tablets: same look, without the effects that cost the most there ─────────
+   Backdrop blurs and blend modes over a live WebGL canvas force the browser to recomposite the whole frame. */
+@media (pointer: coarse) {
+  .fo-dim { backdrop-filter: none; background: radial-gradient(120% 90% at 50% 45%, rgba(4, 6, 6, 0.72), rgba(2, 3, 3, 0.94)); }
+  .fo-halo { display: none; }
+  .fo-tex { mix-blend-mode: normal; opacity: calc(var(--dim) * 0.6); }
+  .fo-tex::after { mix-blend-mode: normal; }
+  .fo-leak, .so::after { mix-blend-mode: normal; }
+  .fo-grain, .ct-print-grain { display: none; }
+  .fo-clips li, .ct-form { backdrop-filter: none; }
+  .fo-screen { box-shadow: 0 0 0 1px rgba(231, 229, 228, 0.14), 0 24px 60px rgba(0, 0, 0, 0.7); }
+  .nav { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); background: linear-gradient(180deg, rgba(30, 30, 32, 0.72), rgba(16, 16, 18, 0.62)); }
+}

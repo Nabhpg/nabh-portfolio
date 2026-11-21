@@ -1,16 +1,18 @@
 import { ANSWER, QUESTION, ease, seg } from "./timeline";
+import { LITE } from "@/lib/quality";
 
 const W = 2048, H = 1330;
+const SCALE = LITE ? 0.5 : 0.75; // every repaint is re-uploaded whole; 1536 px is still crisp at full screen
 
 /** The laptop's screen: an AI chat window, painted to a canvas. q = 0..1 runs the exchange (type, send, answer). */
 export class ChatScreen {
   canvas = document.createElement("canvas");
   private c: CanvasRenderingContext2D;
   private sans = "Helvetica, Arial, sans-serif";
-  private last = -1;
+  private last = "";
 
   constructor() {
-    this.canvas.width = W; this.canvas.height = H;
+    this.canvas.width = Math.round(W * SCALE); this.canvas.height = Math.round(H * SCALE);
     this.c = this.canvas.getContext("2d")!;
     const g = getComputedStyle(document.documentElement).getPropertyValue("--font-geist-sans").trim();
     if (g) this.sans = `${g}, Helvetica, sans-serif`;
@@ -29,13 +31,16 @@ export class ChatScreen {
 
   /** Returns true if the picture changed. */
   draw(q: number, blink: boolean) {
-    const key = Math.round(q * 4000) * 2 + (blink ? 1 : 0);
+    const typedN = Math.round(QUESTION.length * seg(q, [0.04, 0.3]));
+    const sent = q > 0.34, thinking = sent && q < 0.42;
+    const words = ANSWER.join(" \n ").split(" "), shown = Math.round(words.length * seg(q, [0.42, 0.95]));
+    const dots = thinking ? Math.floor(q * 120) % 12 : -1;
+    const key = `${typedN}|${sent}|${dots}|${shown}|${blink && (!sent || shown < words.length)}`;
     if (key === this.last) return false;
     this.last = key;
     const c = this.c;
-    const typed = QUESTION.slice(0, Math.round(QUESTION.length * seg(q, [0.04, 0.3])));
-    const sent = q > 0.34, thinking = sent && q < 0.42;
-    const words = ANSWER.join(" \n ").split(" "), shown = Math.round(words.length * seg(q, [0.42, 0.95]));
+    c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    const typed = QUESTION.slice(0, typedN);
 
     // window
     const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#101114"); bg.addColorStop(1, "#0a0b0d");

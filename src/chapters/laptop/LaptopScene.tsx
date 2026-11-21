@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { ChatScreen } from "./chat";
 import { HOME, LAP, ease, lidAngle, seg, yawAt } from "./timeline";
+import { LITE, LITE_DEF } from "@/lib/quality";
 
 // MacBook Air proportions, 1 unit = 10 cm: 30.4 × 21.5 cm, about 1.1 cm thick closed.
 const BW = 3.04, BD = 2.15, BASE_T = 0.068, LID_T = 0.042, CORNER = 0.115;
@@ -18,12 +19,17 @@ function slab(thickness: number) {
 }
 const glowVert = /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 /** The dark the laptop hangs in: slow haze with a warm side and a cold side, soft shafts of light, never flat. */
-const auraFrag = /* glsl */ `
+const auraFrag = LITE_DEF + /* glsl */ `
+  #ifdef LITE
+  #define OCT 2
+  #else
+  #define OCT 4
+  #endif
   varying vec2 vUv; uniform float uI, uTime;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
-  float fbm(vec2 p) { float a = 0.5, v = 0.0; for (int i = 0; i < 4; i++) { v += a * vn(p); p = p * 2.03 + 11.0; a *= 0.5; } return v; }
+  float fbm(vec2 p) { float a = 0.5, v = 0.0; for (int i = 0; i < OCT; i++) { v += a * vn(p); p = p * 2.03 + 11.0; a *= 0.5; } return v; }
   void main() {
     vec2 p = vUv - 0.5; float r = length(p) * 2.0;
     float haze = fbm(p * 3.2 + vec2(uTime * 0.018, -uTime * 0.012)) * fbm(p * 1.4 - uTime * 0.01);
@@ -44,7 +50,9 @@ export default function LaptopScene({ x }: { x: RefObject<number> }) {
   const time = useRef(0), keyed = useRef(false);
 
   const chat = useMemo(() => new ChatScreen(), []);
-  const tex = useMemo(() => { const t = new THREE.CanvasTexture(chat.canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }, [chat]);
+  // paint the screen's opening state now, so the warm-up uploads it and the first frame after the cut has nothing to do
+  useMemo(() => chat.draw(0, true), [chat]);
+  const tex = useMemo(() => { const t = new THREE.CanvasTexture(chat.canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = LITE ? 4 : 8; return t; }, [chat]);
   useEffect(() => () => tex.dispose(), [tex]);
   const geo = useMemo(() => ({ base: slab(BASE_T), lid: slab(LID_T) }), []);
   const mats = useMemo(() => ({
@@ -56,10 +64,15 @@ export default function LaptopScene({ x }: { x: RefObject<number> }) {
   }), []);
   const auraU = useMemo(() => ({ uI: { value: 0 }, uTime: { value: 0 } }), []);
 
-  useFrame(({ camera }, dt) => {
+  useFrame(({ camera, size }, dt) => {
     const xx = x.current ?? 0, on = xx > LAP.cut;
     if (group.current) group.current.visible = on;
-    if (!on) return;
+    if (!on) {
+      if (rim.current) rim.current.intensity = 0;
+      if (fill.current) fill.current.intensity = 0;
+      if (glow.current) glow.current.intensity = 0;
+      return;
+    }
     time.current += Math.min(dt, 0.05);
     if (!keyed.current && keys.current) {
       // keyboard: 5 rows of caps and a shorter function row
@@ -85,7 +98,8 @@ export default function LaptopScene({ x }: { x: RefObject<number> }) {
     if (lid.current) lid.current.rotation.x = Math.PI / 2 - lidAngle(xx);
 
     const q = seg(xx, LAP.chat), power = ease(seg(xx, [LAP.lid[0] + 0.06, LAP.lid[1]]));
-    if (chat.draw(q, Math.floor(time.current * 2) % 2 === 0)) tex.needsUpdate = true;
+    const portrait = size.width < size.height;
+    if (chat.draw(portrait ? 0 : q, Math.floor(time.current * 2) % 2 === 0)) tex.needsUpdate = true;
     if (screenMat.current) screenMat.current.color.setScalar(0.92 * power);
     for (const m of Object.values(mats)) m.envMapIntensity = 0.3 * arrive;
     if (rim.current) rim.current.intensity = 55 * arrive;
@@ -96,6 +110,7 @@ export default function LaptopScene({ x }: { x: RefObject<number> }) {
   });
 
   return (
+    <>
     <group ref={group} position={HOME} visible={false}>
       {/* laptop-local axes: x right, y up, z toward the user */}
       <group ref={body}>
@@ -111,16 +126,19 @@ export default function LaptopScene({ x }: { x: RefObject<number> }) {
             <planeGeometry args={[2.9, 2.9 * 1330 / 2048]} />
             <meshBasicMaterial ref={screenMat} map={tex} toneMapped={false} color="#000" />
           </mesh>
-          <pointLight ref={glow} position={[0, BD / 2, 0.9]} color="#cfd8e6" distance={5} decay={2} intensity={0} />
         </group>
       </group>
-
-      <pointLight ref={rim} position={[-6.5, 6, 4.5]} color="#ffc793" distance={30} decay={2} intensity={0} />
-      <pointLight ref={fill} position={[5, -6, 3]} color="#9db4d6" distance={24} decay={2} intensity={0} />
       <mesh ref={aura} position={[0, 7, 0.6]} renderOrder={-1}>
         <planeGeometry args={[46, 46]} />
         <shaderMaterial ref={auraMat} vertexShader={glowVert} fragmentShader={auraFrag} uniforms={auraU} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
     </group>
+    <group position={HOME}>
+      <pointLight ref={rim} position={[-6.5, 6, 4.5]} color="#ffc793" distance={30} decay={2} intensity={0} />
+      <pointLight ref={fill} position={[5, -6, 3]} color="#9db4d6" distance={24} decay={2} intensity={0} />
+      {/* the screen's own light on the keys, in front of where the open screen sits */}
+      <pointLight ref={glow} position={[0, -1.6, 1.4]} color="#cfd8e6" distance={5} decay={2} intensity={0} />
+    </group>
+    </>
   );
 }

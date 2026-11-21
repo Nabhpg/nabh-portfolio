@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { CLIENTS, SHOW, ease, seg } from "./timeline";
+import { styleWriter } from "@/lib/styleWriter";
 
 /**
  * Words over the screening: who the client is, what was done, where to see it. The slates and credits are
@@ -14,31 +15,33 @@ export default function ScreeningOverlay({ screen, out }: { screen: RefObject<nu
 
   useEffect(() => {
     let raf = 0;
+    const writers = new Map<HTMLElement, ReturnType<typeof styleWriter>>();
+    const w = (el: HTMLElement) => { let f = writers.get(el); if (!f) { f = styleWriter(el); writers.set(el, f); } return f; };
     const tick = () => {
       const s = screen.current ?? 0, el = root.current;
       if (el) {
-        const gone = ease(seg(out.current ?? 0, [0, 0.06]));
-        el.style.visibility = s > 0.05 && gone < 1 ? "visible" : "hidden";
-        el.style.opacity = (1 - gone).toFixed(3);
-        el.style.setProperty("--mark", ease(seg(s, [0.16, 0.22])).toFixed(3));
+        const gone = ease(seg(out.current ?? 0, [0, 0.06])), r = w(el);
+        r("visibility", s > 0.05 && gone < 1 ? "visible" : "hidden");
+        r("opacity", 1 - gone);
+        r("--mark", ease(seg(s, [0.16, 0.22])));
         SHOW.reels.forEach(([a, b], i) => {
           const c = caps.current[i]; if (!c) return;
           const p = (s - a) / (b - a);
-          const o = ease(seg(p, [SHOW.slate + 0.04, SHOW.slate + 0.16])) * (1 - ease(seg(p, [0.9, 0.99])));
-          c.style.opacity = o.toFixed(3);
-          c.style.transform = `translateY(${((1 - o) * 12).toFixed(1)}px)`;
-          c.style.pointerEvents = o > 0.6 ? "auto" : "none";
+          const o = ease(seg(p, [SHOW.slate + 0.04, SHOW.slate + 0.16])) * (1 - ease(seg(p, [0.9, 0.99]))), cw = w(c);
+          cw("opacity", o);
+          cw("transform", `translateY(${((1 - o) * 12).toFixed(1)}px)`);
+          cw("pointerEvents", o > 0.6 ? "auto" : "none");
         });
         if (intro.current) {
           // said once, as the projector warms up, before the first reel
-          const o = ease(seg(s, [0.1, 0.16])) * (1 - ease(seg(s, [0.215, 0.25])));
-          intro.current.style.opacity = o.toFixed(3);
-          intro.current.style.transform = `translateY(${((1 - o) * 12).toFixed(1)}px)`;
+          const o = ease(seg(s, [0.1, 0.16])) * (1 - ease(seg(s, [0.215, 0.25]))), iw = w(intro.current);
+          iw("opacity", o);
+          iw("transform", `translateY(${((1 - o) * 12).toFixed(1)}px)`);
         }
         if (end.current) {
-          const o = ease(seg(s, [0.93, 0.99]));
-          end.current.style.opacity = o.toFixed(3);
-          end.current.style.pointerEvents = o > 0.6 ? "auto" : "none";
+          const o = ease(seg(s, [0.93, 0.99])), ew = w(end.current);
+          ew("opacity", o);
+          ew("pointerEvents", o > 0.6 ? "auto" : "none");
         }
       }
       raf = requestAnimationFrame(tick);
