@@ -17,7 +17,8 @@
 
 ## Live
 - https://nabh-portfolio.netlify.app (Netlify site `nabh-portfolio`, id ae8b4359-dcd0-4325-8694-fa5d2dba7b27, account Nabh priya Gautam).
-- Redeploy: `PATH="$HOME/.local/node/bin:$PATH" npm run build && npx netlify-cli deploy --dir=out --prod --site=ae8b4359-dcd0-4325-8694-fa5d2dba7b27`
+- Deploys: pushing to `main` on GitHub makes Netlify build and publish automatically (verified 2026-11-21, commit 9065ce7).
+- Manual redeploy: `PATH="$HOME/.local/node/bin:$PATH" npm run build && npx netlify-cli deploy --dir=out --prod --site=ae8b4359-dcd0-4325-8694-fa5d2dba7b27`
 
 ## Code
 - Public repo: https://github.com/Nabhpg/nabh-portfolio (branch main). Kept out via .gitignore: docs/PROFILE.md, assets-src/, .netlify/, .claude/.
