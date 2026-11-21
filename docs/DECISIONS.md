@@ -39,3 +39,4 @@
 - 2026-11-14 — Deployed as a static export (`output: "export"`, `out/`) to Netlify site nabh-portfolio → https://nabh-portfolio.netlify.app. `netlify.toml` holds build + cache headers. Deploys are manual from this Mac (no git connection yet).
 - 2026-11-14 — Code published to public repo Nabhpg/nabh-portfolio. Private profile notes and raw signature/source photos stay local only. Netlify deploys remain manual (repo not linked to Netlify yet).
 - 2026-11-21 — Phones get a LITE tier (lighter assets, no shadows, cheaper shaders/CSS). Lights never toggle visibility. One off-screen warm-up draw after load. Laptop chat on tall screens is page HTML, not the 3D screen.
+- 2026-11-21 — Phone header: slim bar with full name + Menu pill; sections open in a glass drop-down. Phone chat card grows out of the laptop screen; thread anchored to the bottom with height-aware text.

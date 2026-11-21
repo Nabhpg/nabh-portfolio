@@ -20,6 +20,7 @@ type LenisLike = { scrollTo: (y: number, o?: { immediate?: boolean }) => void };
 export default function SiteHeader() {
   const [active, setActive] = useState(-1);
   const [veil, setVeil] = useState(false);
+  const [open, setOpen] = useState(false); // the phone menu
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const section = () => document.querySelector<HTMLElement>('section[aria-label="Prologue"]');
@@ -27,6 +28,7 @@ export default function SiteHeader() {
 
   useEffect(() => {
     const onScroll = () => {
+      setOpen(false);
       const el = section(), contact = document.getElementById("contact");
       if (!el) return;
       if (contact && contact.getBoundingClientRect().top < window.innerHeight * 0.5) return setActive(3);
@@ -39,6 +41,7 @@ export default function SiteHeader() {
   }, []);
 
   const go = (i: number) => {
+    setOpen(false);
     const el = section(), contact = document.getElementById("contact");
     const y = i < 0 ? 0 : LINKS[i].at < 0 || !el || span(el) <= 0 ? (contact ? contact.offsetTop : 0) : el.offsetTop + LINKS[i].at * span(el);
     setVeil(true);
@@ -53,11 +56,16 @@ export default function SiteHeader() {
   return (
     <>
       <div className={`nav-veil${veil ? " on" : ""}`} aria-hidden />
-      <header className="nav">
+      <header className={`nav${open ? " open" : ""}`}>
         <button className="nav-brand" onClick={() => go(-1)} aria-label="Nabh Priya Gautam — back to the top">
-          <span className="nav-full">Nabh Priya Gautam</span><span className="nav-short">Nabh</span>
+          <span className="nav-full">Nabh Priya Gautam</span><span className="nav-short">Nabh Priya Gautam</span>
         </button>
-        <nav aria-label="Sections">
+        {/* phones: the current section's name and a menu button; the links open in a glass panel below */}
+        <button className="nav-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="nav-links" aria-label={open ? "Close menu" : "Open menu"}>
+          <span className="nav-now">{active >= 0 ? LINKS[active].label : "Menu"}</span>
+          <span className="nav-burger" aria-hidden><i /><i /></span>
+        </button>
+        <nav id="nav-links" aria-label="Sections">
           {LINKS.map((l, i) => (
             <button key={l.id} onClick={() => go(i)} className={active === i ? "on" : undefined} aria-current={active === i ? "true" : undefined}>{l.label}</button>
           ))}

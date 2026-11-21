@@ -29,10 +29,13 @@ export default function LaptopOverlay({ laptop }: { laptop: RefObject<number> })
       setMark?.("opacity", 1 - 0.6 * ease(seg(x, LAP.push)));
       const tall = window.innerWidth < window.innerHeight;
       if (setChat) {
-        const o = tall ? ease(seg(x, [LAP.push[1] - 0.06, LAP.push[1] + 0.01])) : 0;
-        setChat("opacity", o);
-        setChat("visibility", o > 0.001 ? "visible" : "hidden");
-        setChat("transform", `translateY(${((1 - o) * 18).toFixed(1)}px) scale(${(0.97 + 0.03 * o).toFixed(3)})`);
+        // the card lifts out of the laptop's screen: it starts as the screen's own shape and grows to full size,
+        // then its contents fade up once the shape has settled
+        const e = tall ? ease(seg(x, [LAP.push[1] - 0.09, LAP.push[1] + 0.02])) : 0;
+        const o = e;
+        setChat("--e", e);
+        setChat("--c", ease(seg(e, [0.55, 1])));
+        setChat("visibility", e > 0.001 ? "visible" : "hidden");
         if (o > 0.001) {
           const q = seg(x, LAP.chat);
           const n = Math.round(QUESTION.length * seg(q, [0.04, 0.3])), sent = q > 0.34, thinking = sent && q < 0.42;
@@ -64,7 +67,7 @@ export default function LaptopOverlay({ laptop }: { laptop: RefObject<number> })
 
   return (
     <div ref={root} className="lp" style={{ visibility: "hidden" }}>
-      <div ref={chat} className="lp-chat" aria-hidden style={{ visibility: "hidden", opacity: 0 }}>
+      <div ref={chat} className="lp-chat" aria-hidden style={{ visibility: "hidden" }}>
         <div className="lp-bar"><span>About Nabh</span><span className="lp-online"><i /> online</span></div>
         <div className="lp-thread">
           <p ref={asked} className="lp-q">{QUESTION}</p>
